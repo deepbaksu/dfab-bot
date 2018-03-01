@@ -19,7 +19,7 @@
 	- [`[GET] /boards/{id}`](https://developers.trello.com/v1.0/reference#boardsboardid-1): Getting all the informations of boards.
 
 ### 3. Integration
-1. Command format: `get [user라벨] [기간] [a/b]`.
+1. Command format: `@DFAB get [user라벨] [기간] [a/b]`.
 2. `trello_api.py`: receive arguments, requests and handle user's trello data and return output. 
 3. `starterbot.py`: split the command, pass arguments to get trello data, pass output to the user.
 
