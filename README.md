@@ -1,2 +1,34 @@
 # dfab-bot
-DFAB팀 trello - slack 관리를 위한 bot 
+
+### 1. Slack API 
+1. `pip install slackclient` 
+2. [Create a Slack App](https://api.slack.com/apps/new)
+3. Click on the new App - Install App and get **Bot User OAuth Access Token**.
+4. `export SLACK_BOT_TOKEN='your bot user access token'`.
+5. copy script from [gist](https://github.com/mattmakai/slack-starterbot/blob/master/starterbot.py).
+6. Check if the script works right. 
+
+### 2. Trello API 
+1. Go to https://trello.com/1/appKey/generate and generate **API key.**
+2. `export KEY='your trello API key'`
+3. Go to https://trello.com/1/autorize?key=[KEY]&name=SimpleBASHScript&expiration=never&response_type=token&scope=read,write and get **token**
+4. `export TOKEN='your trello API token`
+5. Using given **key and token**, go to https://developers.trello.com/v1.0/reference#introduction and check.
+6. What i used:
+	- [`[GET] /boards/{id}/cards`](https://developers.trello.com/v1.0/reference#boardsboardidtest): Getting all the informations of cards.
+	- [`[GET] /boards/{id}`](https://developers.trello.com/v1.0/reference#boardsboardid-1): Getting all the informations of boards.
+
+### 3. Integration
+1. Command format: `get [user라벨] [기간] [a/b]`.
+2. `trello_api.py`: receive arguments, requests and handle user's trello data and return output. 
+3. `starterbot.py`: split the command, pass arguments to get trello data, pass output to the user.
+
+### 4. Distribution
+Google cloud - compute engine (vCPU 1, Ubuntu)
+
+### Reference
+1. https://www.fullstackpython.com/blog/build-first-slack-bot-python.html
+2. https://gist.github.com/CrookedNumber/8856939
+3. https://developers.trello.com/v1.0/reference#introduction
+
+
