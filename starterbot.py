@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Slack bot tutorial followed the code of https://www.fullstackpython.com/blog/build-first-slack-bot-python.html"""
 
 import os
