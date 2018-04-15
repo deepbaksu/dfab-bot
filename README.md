@@ -17,6 +17,7 @@
 6. What i used:
 	- [`[GET] /boards/{id}/cards`](https://developers.trello.com/v1.0/reference#boardsboardidtest): Getting all the informations of cards.
 	- [`[GET] /boards/{id}`](https://developers.trello.com/v1.0/reference#boardsboardid-1): Getting all the informations of boards.
+	- [`[GET] /boards/{id}/checklists`](https://developers.trello.com/v1.0/reference#boardsboardidactions-3): Getting all checkpoints in the boards to distinguish continuously updated cards.
 
 ### 3. Integration
 1. Command format: `@DFAB get [user라벨] [기간] [a/b]`.

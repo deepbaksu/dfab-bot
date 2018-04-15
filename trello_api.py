@@ -5,39 +5,44 @@ import json
 import datetime
 import os
 
+# secret keys 
 ALPHA = os.environ.get('ALPHA')
 BRAVO = os.environ.get('BRAVO')
 KEY = os.environ.get('KEY')
 TOKEN = os.environ.get('TOKEN')
 
-def get_trello(username, period, board):
+# API urls & queries 
+ACTIONS_URL = "https://api.trello.com/1/boards/{}/actions"
+ACTIONS_QUERY = {"key": KEY, "token": TOKEN, "limit": 500}
+
+TODAY_DATE = datetime.date.today()
+
+
+def _get_data_from_API(api_url, query, ID):
+    api_url = api_url.format(ID)
+    res = requests.request('GET', api_url, params=query)
+    json_data = json.loads(res.text)
+    return json_data
+
+
+def _datetime_converter(input_time):
+    converted_time = datetime.datetime.strptime(input_time, '%Y-%m-%dT%H') + datetime.timedelta(hours=9)
+    converted_date = converted_time.date()
+    return converted_date
+
+
+def _check_date_in_period(date, period):
+    date_diff = TODAY_DATE - _datetime_converter(date)
+    return date_diff.days <= int(period)
+
+
+def get_trello(user_initial, period, board):
     if board == 'a':
         BOARD_ID = ALPHA
     elif board == 'b':
         BOARD_ID = BRAVO
-    cards_url = f"https://api.trello.com/1/boards/{BOARD_ID}/cards"
-    boards_url = f'https://api.trello.com/1/boards/{BOARD_ID}'
-    cards_query = {"key": KEY, "token": TOKEN}
-    boards_query = {"actions": "1000", "boardStars": "none", "cards": "none", "checklists": "none",
-                   "fields": "name, desc, descData, closed, idOrganization, pinned, url, shortUrl, prefs, labelNames",
-                   "lists": "open", "members": "none", "memberships": "none", "membersInvited": "none",
-                   "membersInvited_fields": "all", "key": KEY, "token": TOKEN}
-    cards_res = requests.request("GET", cards_url, params=cards_query)
-    boards_res = requests.request("GET", boards_url, params=boards_query)
 
-    cards_data = json.loads(cards_res.text)
-    boards_data = json.loads(boards_res.text)
-
-    # getting ids of '완료', '오늘 할 일' boards
-    for list in boards_data['lists']:
-        if list['name'] == '완료':
-            complete = list['id']
-        elif list['name'] == '오늘 할 일':
-            today = list['id']
-        elif list['name'] == '일시정지':
-            pause = list['id']
-        elif list['name'] == '아이디어':
-            idea = list['id']
+    actions_data = _get_data_from_API(ACTIONS_URL, ACTIONS_QUERY, BOARD_ID)
 
     # gathering info for the user by matching userlabel.
     completed_tasks = []
@@ -45,32 +50,33 @@ def get_trello(username, period, board):
     idea_tasks = []
     paused_tasks = []
 
-    for cd in cards_data:
-        # consider the case labels doesn't exist.
-        if cd['labels']:
-            if cd['labels'][0]['name'].lower() == username.lower():
-                today_date = datetime.date.today()
-                if cd['idList'] == complete:
-                    # Converted American to Korean time
-                    end_time = datetime.datetime.strptime(cd['dateLastActivity'][: -11], '%Y-%m-%dT%H') + \
-                               datetime.timedelta(hours=9)
-                    time_diff = today_date - end_time.date()
-                    if time_diff.days <= int(period):
-                        completed_tasks.append(cd['name'])
-                elif cd['idList'] == today:
-                    today_tasks.append(cd['name'])
-                elif cd['idList'] == pause:
-                    end_time = datetime.datetime.strptime(cd['dateLastActivity'][: -11], '%Y-%m-%dT%H') + \
-                               datetime.timedelta(hours=9)
-                    time_diff = today_date - end_time.date()
-                    if time_diff.days <= int(period):
-                        paused_tasks.append(cd['name'])
-                elif cd['idList'] == idea:
-                    end_time = datetime.datetime.strptime(cd['dateLastActivity'][: -11], '%Y-%m-%dT%H') + \
-                               datetime.timedelta(hours=9)
-                    time_diff = today_date - end_time.date()
-                    if time_diff.days <= int(period):
-                        idea_tasks.append(cd['name'])
+    actions_all_needed = [act for act in actions_data if
+                          _check_date_in_period(act['date'][: -11], period) and
+                          (act['type'] == 'createCard' or
+                           'Checklist' in act['type'] or
+                           'listAfter' in act['data'])]
+    # seperate tasks
+    for act in actions_all_needed:
+        act_user_initial = act['memberCreator']['initials'].lower()
+        if user_initial.lower() == act_user_initial:
+            if 'list' in act['data']:
+                if act['data']['list']['name'] == '오늘 할 일':
+                    today_tasks.append(act['data']['card']['name'])
+                elif act['data']['list']['name'] == '완료':
+                    completed_tasks.append(act['data']['card']['name'])
+                elif act['data']['list']['name'] == '일시정지':
+                    paused_tasks.append(act['data']['card']['name'])
+                elif act['data']['list']['name'] == '아이디어':
+                    idea_tasks.append(act['data']['card']['name'])
+            elif 'listAfter' in act['data']:
+                if act['data']['listAfter']['name'] == '오늘 할 일':
+                    today_tasks.append(act['data']['card']['name'])
+                elif act['data']['listAfter']['name'] == '완료':
+                    completed_tasks.append(act['data']['card']['name'])
+                elif act['data']['listAfter']['name'] == '일시정지':
+                    paused_tasks.append(act['data']['card']['name'])
+                elif act['data']['listAfter']['name'] == '아이디어':
+                    idea_tasks.append(act['data']['card']['name'])
 
     completed_msg = '*완료*\n' + '\n'.join(completed_tasks) + '\n\n' if completed_tasks else ''
     today_msg = '*오늘 할 일*\n' + '\n'.join(today_tasks) + '\n\n' if today_tasks else ''
