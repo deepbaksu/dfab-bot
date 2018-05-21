@@ -11,9 +11,12 @@ BRAVO = os.environ.get('BRAVO')
 KEY = os.environ.get('KEY')
 TOKEN = os.environ.get('TOKEN')
 
-# API urls & queries 
 ACTIONS_URL = "https://api.trello.com/1/boards/{}/actions"
-ACTIONS_QUERY = {"key": KEY, "token": TOKEN, "limit": 500}
+ACTIONS_QUERY = {"key": KEY, "token": TOKEN, "limit": 300}
+
+CARDS_LIST_URL = "https://api.trello.com/1/boards/{}/lists"
+CARDS_LIST_QUERY = {"cards": "all","card_fields": "all","filter": "open",
+                    "fields": "all", "key": KEY, "token": TOKEN}
 
 TODAY_DATE = datetime.date.today()
 
@@ -33,7 +36,7 @@ def _datetime_converter(input_time):
 
 def _check_date_in_period(date, period):
     date_diff = TODAY_DATE - _datetime_converter(date)
-    return date_diff.days <= int(period)
+    return date_diff.days <= int(period) - 1
 
 
 def get_trello(user_initial, period, board):
@@ -43,40 +46,47 @@ def get_trello(user_initial, period, board):
         BOARD_ID = BRAVO
 
     actions_data = _get_data_from_API(ACTIONS_URL, ACTIONS_QUERY, BOARD_ID)
+    card_list = _get_data_from_API(CARDS_LIST_URL, CARDS_LIST_QUERY, BOARD_ID)
+
+    # gathering card lists for each board.
+    idea_cards = {cd['id']: cd['name'] for cd in card_list[0]['cards']}
+    today_cards = {cd['id']: cd['name'] for cd in card_list[1]['cards']}
+    complete_cards = {cd['id']: cd['name'] for cd in card_list[2]['cards']}
+    paused_cards = {cd['id']: cd['name'] for cd in card_list[3]['cards']}
 
     # gathering info for the user by matching userlabel.
     completed_tasks = []
     today_tasks = []
     idea_tasks = []
     paused_tasks = []
+    added_tasks = [] # to prevent duplicate 
 
     actions_all_needed = [act for act in actions_data if
                           _check_date_in_period(act['date'][: -11], period) and
                           (act['type'] == 'createCard' or
-                           'Checklist' in act['type'] or
-                           'listAfter' in act['data'])]
+                           act['type'] == 'updateCard' or
+                           'listAfter' in act['data'] or
+                           'Check' in act['type'])]
+
     # seperate tasks
     for act in actions_all_needed:
         act_user_initial = act['memberCreator']['initials'].lower()
+        card_data = act['data']
+        card_id = card_data['card']['id']
+        if card_id in added_tasks:
+            continue
         if user_initial.lower() == act_user_initial:
-            if 'list' in act['data']:
-                if act['data']['list']['name'] == '오늘 할 일':
-                    today_tasks.append(act['data']['card']['name'])
-                elif act['data']['list']['name'] == '완료':
-                    completed_tasks.append(act['data']['card']['name'])
-                elif act['data']['list']['name'] == '일시정지':
-                    paused_tasks.append(act['data']['card']['name'])
-                elif act['data']['list']['name'] == '아이디어':
-                    idea_tasks.append(act['data']['card']['name'])
-            elif 'listAfter' in act['data']:
-                if act['data']['listAfter']['name'] == '오늘 할 일':
-                    today_tasks.append(act['data']['card']['name'])
-                elif act['data']['listAfter']['name'] == '완료':
-                    completed_tasks.append(act['data']['card']['name'])
-                elif act['data']['listAfter']['name'] == '일시정지':
-                    paused_tasks.append(act['data']['card']['name'])
-                elif act['data']['listAfter']['name'] == '아이디어':
-                    idea_tasks.append(act['data']['card']['name'])
+            added_tasks.append(card_id)
+        else:
+            continue
+        if card_id in today_cards:
+            today_tasks.append(today_cards[card_id])
+        elif card_id in complete_cards:
+            completed_tasks.append(complete_cards[card_id])
+        elif card_id in paused_cards:
+            paused_tasks.append(paused_cards[card_id])
+        elif card_id in idea_cards:
+            idea_tasks.append(idea_cards[card_id])
 
     completed_msg = '*완료*\n' + '\n'.join(completed_tasks) + '\n\n' if completed_tasks else ''
     today_msg = '*오늘 할 일*\n' + '\n'.join(today_tasks) + '\n\n' if today_tasks else ''

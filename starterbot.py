@@ -44,7 +44,7 @@ def handle_command(command, channel):
         Executes bot command if the command is known
     """
     # Default response is help text for the user
-    default_response = "입력 값은 *get* 으로 시작해야 합니다.".format(EXAMPLE_COMMAND)
+    default_response = "입력 값은 *get* 으로 시작해야 합니다."
 
     # Finds and executes the given command, filling in response
     response = None
@@ -60,8 +60,9 @@ def handle_command(command, channel):
             try:
                 response = get_trello(username, period, board)
                 if not response:
-                    response = '입력된 user에 대한 정보를 찾지 못했습니다. 입력된 userlabel을 다시 확인해주세요.'
-            except:
+                    response = '입력된 user에 대한 정보를 찾지 못했습니다.  입력된 userinitial을 다시 확인해주세요.'
+            except Exception as e:
+                print(e)
                 response = '에러가 발생했습니다. 입력 형식을 확인해주세요. \n*입력 형식*: @DFAB get [user라벨] [기간] [a or b]'
     # Sends the response back to the channel
     slack_client.api_call(
