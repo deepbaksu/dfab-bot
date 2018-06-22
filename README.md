@@ -14,22 +14,19 @@
 3. Go to https://trello.com/1/autorize?key=[KEY]&name=SimpleBASHScript&expiration=never&response_type=token&scope=read,write and get **token**
 4. `export TOKEN='your trello API token'`.
 5. Using given **key and token**, go to https://developers.trello.com/v1.0/reference#introduction and check.
-6. What i used:
-	- [`[GET] /boards/{id}/cards`](https://developers.trello.com/v1.0/reference#boardsboardidtest): Getting all the informations of cards.
-	- [`[GET] /boards/{id}`](https://developers.trello.com/v1.0/reference#boardsboardid-1): Getting all the informations of boards.
-	- [`[GET] /boards/{id}/checklists`](https://developers.trello.com/v1.0/reference#boardsboardidactions-3): Getting all checkpoints in the boards to distinguish continuously updated cards.
+6. What i've used:
+	- [`[GET] /boards/{id}/actions`](https://developers.trello.com/v1.0/reference#boardsboardidactions): Getting all the actions related to the boards.
 
 ### 3. Integration
-1. Command format: `@DFAB get [user라벨] [기간] [a/b]`.
-2. `trello_api.py`: receive arguments, requests and handle user's trello data and return output. 
+1. Command format: `@DFAB get [user initial] [period] [a/b]`.
+2. `trello_api.py`: receive arguments, requests and preprocess user's trello data and return.
 3. `starterbot.py`: split the command, pass arguments to get trello data, pass output to the user.
+4. `forever.py`: run forever in local!
 
 ### 4. Distribution
-Google cloud - compute engine (vCPU 1, Ubuntu)
+local PC (24hr): `nohup ./forever starterbot.py > /dev/null 2>&1&`
 
 ### Reference
 1. https://www.fullstackpython.com/blog/build-first-slack-bot-python.html
 2. https://gist.github.com/CrookedNumber/8856939
 3. https://developers.trello.com/v1.0/reference#introduction
-
-
