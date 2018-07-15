@@ -5,7 +5,8 @@ import json
 import datetime
 import os
 
-# secret keys 
+
+# secret keys
 ALPHA = os.environ.get('ALPHA')
 BRAVO = os.environ.get('BRAVO')
 KEY = os.environ.get('KEY')
@@ -24,6 +25,7 @@ TODAY_DATE = datetime.date.today()
 def _get_data_from_API(api_url, query, ID):
     api_url = api_url.format(ID)
     res = requests.request('GET', api_url, params=query)
+    res.raise_for_status()
     json_data = json.loads(res.text)
     return json_data
 
@@ -59,7 +61,7 @@ def get_trello(user_initial, period, board):
     today_tasks = []
     idea_tasks = []
     paused_tasks = []
-    added_tasks = [] # to prevent duplicate 
+    added_tasks = [] # to prevent duplicate
 
     actions_all_needed = [act for act in actions_data if
                           _check_date_in_period(act['date'][: -11], period) and
@@ -95,3 +97,11 @@ def get_trello(user_initial, period, board):
 
     results = completed_msg + today_msg + idea_msg + paused_msg
     return results
+
+
+if __name__ == '__main__':
+    userId = 'wk'
+    period = 2
+    boardId = 'a'
+    result = get_trello(userId, period, boardId)
+    print(result)
