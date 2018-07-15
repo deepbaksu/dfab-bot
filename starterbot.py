@@ -2,10 +2,16 @@
 """Slack bot tutorial followed the code of https://www.fullstackpython.com/blog/build-first-slack-bot-python.html"""
 
 import os
+import logging
 import time
 import re
 from slackclient import SlackClient
 from trello_api import get_trello
+
+from logger import logging_file_config
+
+
+logging_file_config('./log')
 
 # instantiate Slack client
 slack_client = SlackClient(os.environ.get('SLACK_BOT_TOKEN'))
@@ -52,7 +58,8 @@ def handle_command(command, channel):
     if command.startswith(EXAMPLE_COMMAND):
         inputs = command.split()
         if len(inputs) > 4:
-            response = '4개가 넘는 item이 입력되었습니다. 입력 형식을 확인해주세요. \n*입력 형식*: @DFAB get [user라벨] [기간] [a or b]'
+            response = '4개가 넘는 item이 입력되었습니다. 입력 형식을 확인해주세요. \n*입력 형식*: @DFAB get [userinitial] [기간] [a or b]'
+            logging.info(inputs)
         else:
             username = inputs[-3]
             period = inputs[-2]
@@ -62,8 +69,8 @@ def handle_command(command, channel):
                 if not response:
                     response = '입력된 user에 대한 정보를 찾지 못했습니다.  입력된 userinitial을 다시 확인해주세요.'
             except Exception as e:
-                print(e)
-                response = '에러가 발생했습니다. 입력 형식을 확인해주세요. \n*입력 형식*: @DFAB get [user라벨] [기간] [a or b]'
+                logging.error("ERROR", exc_info=True)
+                response = '에러가 발생했습니다. 입력 형식을 확인해주세요.  \n*입력 형식*: @DFAB get [userinitial] [기간] [a or b]'
     # Sends the response back to the channel
     slack_client.api_call(
         "chat.postMessage",
@@ -83,4 +90,3 @@ if __name__ == "__main__":
             time.sleep(RTM_READ_DELAY)
     else:
         print("Connection failed. Exception traceback printed above.")
-
