@@ -11,7 +11,7 @@
 ### 2. Trello API 
 1. Go to https://trello.com/1/appKey/generate and generate **API key.**
 2. `export KEY='your trello API key'`
-3. Go to https://trello.com/1/autorize?key=[KEY]&name=SimpleBASHScript&expiration=never&response_type=token&scope=read,write and get **token**
+3. Go to https://trello.com/1/authorize?key=[KEY]&name=SimpleBASHScript&expiration=never&response_type=token&scope=read,write and get **token**
 4. `export TOKEN='your trello API token'`.
 5. Using given **key and token**, go to https://developers.trello.com/v1.0/reference#introduction and check.
 6. What i've used:
