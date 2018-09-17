@@ -74,7 +74,10 @@ def get_trello(user_initial, period, board):
     for act in actions_all_needed:
         act_user_initial = act['memberCreator']['initials'].lower()
         card_data = act['data']
-        card_id = card_data['card']['id']
+        if 'card' in card_data:
+            card_id = card_data['card']['id']  #TODO: changes in trello api?
+        else:
+            continue
         if card_id in added_tasks:
             continue
         if user_initial.lower() == act_user_initial:
@@ -101,7 +104,7 @@ def get_trello(user_initial, period, board):
 
 if __name__ == '__main__':
     userId = 'wk'
-    period = 2
-    boardId = 'a'
+    period = 1
+    boardId = 'b'
     result = get_trello(userId, period, boardId)
     print(result)
