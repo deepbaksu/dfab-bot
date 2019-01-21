@@ -68,7 +68,8 @@ def get_trello(user_initial, period, board):
                           (act['type'] == 'createCard' or
                            act['type'] == 'updateCard' or
                            'listAfter' in act['data'] or
-                           'Check' in act['type'])]
+                           'Check' in act['type'] or
+                           'fromCopy' in act['data'])]
 
     # seperate tasks
     for act in actions_all_needed:
@@ -103,7 +104,7 @@ def get_trello(user_initial, period, board):
 
 
 if __name__ == '__main__':
-    userId = 'wk'
+    userId = 'ohah'
     period = 1
     boardId = 'b'
     result = get_trello(userId, period, boardId)
