@@ -5,7 +5,7 @@ from logging.handlers import RotatingFileHandler
 
 
 def logging_file_config(log_filename,
-                        log_level=logging.ERROR,
+                        log_level=logging.INFO,
                         log_max_size=(5* 1024 * 1024),
                         log_backup_count=5,
                         showlog=True):
