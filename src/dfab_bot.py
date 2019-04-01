@@ -1,18 +1,14 @@
-import os
-import logging
 import json
-import datetime
+import re
+
 import requests
 
-from abc import ABC, abstractmethod
-
-from slackclient import SlackClient
 from config import Config
-from utils import datatime_converter, check_date_in_period
+from slackclient import SlackClient
+from utils import check_date_in_period, datatime_converter
 
 
 class TrelloAPIHandler:
-
     def __init__(self, cfg):
         self.base_action_url = cfg.url.action
         self.base_card_list_url = cfg.url.card_list
@@ -23,117 +19,155 @@ class TrelloAPIHandler:
         self.key = cfg.key
         self.token = cfg.token
 
-    def _get_data_from_url(self, api_url, query, board_id):
+    def get_data_from_query(self, base_url, query, board_id):
         query = query.update(key=self.key, token=self.token)
-        api_url = api_url.format(board_id)
-        result = requests.request('GET', api_url, params=query)
-        result.raise_for_status()
-        json_data = json.loads(result.text)
+        query_url = base_url.format(board_id)
+        data = requests.request("GET", query_url, params=query)
+        data.raise_for_status()
+        json_data = json.loads(data.text)
         return json_data
 
     def split_cards_by_category(self, card_list):
-        idea_cards = {cd['id']: cd['name'] for cd in card_list[0]['cards']}
-        today_cards = {cd['id']: cd['name'] for cd in card_list[1]['cards']}
-        complete_cards = {cd['id']: cd['name'] for cd in card_list[2]['cards']}
-        paused_cards = {cd['id']: cd['name'] for cd in card_list[3]['cards']}
-        return idea_cards, today_cards, complete_cards, paused_cards
+        today_cards = {cd["id"]: cd["name"] for cd in card_list[1]["cards"]}
+        done_cards = {cd["id"]: cd["name"] for cd in card_list[2]["cards"]}
+        paused_cards = {cd["id"]: cd["name"] for cd in card_list[3]["cards"]}
+        idea_cards = {cd["id"]: cd["name"] for cd in card_list[0]["cards"]}
+        return today_cards, done_cards, paused_cards, idea_cards
 
-    def _filter_actions(self, actions):
-        filtered_actions = []
+    def filter_action_data(self, actions, period):
+        filtered_action_data = []
         for action in actions:
-            action_date = act['date'][: -11]
-            action_type = act['type']
-            action_data = act['data']
+            action_date = action["date"][:-11]
+            action_data = action["data"]
+            action_type = action["type"]
 
-            if check_date_in_period(action_date, period) and
-                action_type in ['createCard', 'updateCard', 'Check'] or
-                action_data in ['listAfter', 'fromCopy']:
-                    filtered_actions.append(action)
+            if (
+                check_date_in_period(action_date, period)
+                and action_type in ["createCard", "updateCard"]
+                or "Check" in action_type
+                or "listAfter" in action_data
+                or "fromCopy" in action_data
+            ):
+                filtered_action_data.append(action_data)
+        return filtered_action_data
 
-        return filtered_actions
+    def separate_tasks_in_action_data(actions_data, user_initial, *cards):
+        assert len(cards) == 4
+        today_cards, done_cards, paused_cards, idea_cards = cards
 
-    def _generate_msg(self):
-        pass
-
-    def request(self, user_initial, period, board_prefix):
-        if board_prefix == 'a':
-            board_id = self.board_alpha_id
-        elif board_prefix == 'b':
-            board_id = self.board_bravo_id
-
-        actions = self._get_data_from_API(self.base_action_url,
-            self.action_query, board_id)
-        card_list = self._get_data_from_API(self.base_card_list_url,
-            self.card_list_query, board_id)
-
-        idea_cards, today_cards, complete_cards, paused_cards = \
-            self.split_cards_by_category(card_list)
-
-        # gathering info for the user by matching userlabel.
-        completed_tasks = []
         today_tasks = []
-        idea_tasks = []
+        done_tasks = []
         paused_tasks = []
-        added_tasks = []  # to prevent duplicate
+        idea_tasks = []
+        added_tasks = []
 
-        actions_all_needed = [act for act in actions if
-                              self._check_date_in_period(act['date'][: -11], period) and
-                              (act['type'] == 'createCard' or
-                               act['type'] == 'updateCard' or
-                               'listAfter' in act['data'] or
-                               'Check' in act['type'] or
-                               'fromCopy' in act['data'])]
+        for action_data in actions_data:
+            acted_user_initial = (
+                action_data.get("memberCreator", {}).get("initials").lower()
+            )
 
-        # seperate tasks
-        for act in actions_all_needed:
-            act_user_initial = act['memberCreator']['initials'].lower()
-            card_data = act['data']
-            if 'card' in card_data:
-                card_id = card_data['card']['id']  # TODO: changes in trello api?
-            else:
+            card_id = action_data.get("card", {}).get("id")
+            if (
+                card_id is None
+                or card_id in added_tasks
+                or user_initial != acted_user_initial
+            ):
                 continue
-            if card_id in added_tasks:
-                continue
-            if user_initial.lower() == act_user_initial:
-                added_tasks.append(card_id)
-            else:
-                continue
+
+            added_tasks.append(card_id)
+
             if card_id in today_cards:
                 today_tasks.append(today_cards[card_id])
-            elif card_id in complete_cards:
-                completed_tasks.append(complete_cards[card_id])
+            elif card_id in done_cards:
+                done_tasks.append(done_cards[card_id])
             elif card_id in paused_cards:
                 paused_tasks.append(paused_cards[card_id])
             elif card_id in idea_cards:
                 idea_tasks.append(idea_cards[card_id])
+        return idea_tasks, today_tasks, done_tasks, paused_tasks
 
-        completed_msg = '*완료*\n' + '\n'.join(completed_tasks) + '\n\n' if completed_tasks else ''
-        today_msg = '*오늘 할 일*\n' + '\n'.join(today_tasks) + '\n\n' if today_tasks else ''
-        idea_msg = '*아이디어*\n' + '\n'.join(idea_tasks) + '\n\n' if idea_tasks else ''
-        paused_msg = '*일시정지*\n' + '\n'.join(paused_tasks) + '\n\n' if paused_tasks else ''
+    def generate_msg(self, *tasks):
+        assert len(tasks) == 4
+        today_tasks, done_tasks, paused_tasks, idea_tasks = tasks
 
-        results = completed_msg + today_msg + idea_msg + paused_msg
-        return results
+        done_msg = "*Done*\n" + "\n".join(done_tasks) + "\n\n" if done_tasks else ""
+        today_msg = "*Today*\n" + "\n".join(today_tasks) + "\n\n" if today_tasks else ""
+        idea_msg = "*Idea*\n" + "\n".join(idea_tasks) + "\n\n" if idea_tasks else ""
+        paused_msg = (
+            "*Paused*\n" + "\n".join(paused_tasks) + "\n\n" if paused_tasks else ""
+        )
+        final_msg = done_msg + today_msg + idea_msg + paused_msg
+        return final_msg
+
+    def request(self, user_initial, period, board_prefix):
+        if board_prefix == "a":
+            board_id = self.board_alpha_id
+        elif board_prefix == "b":
+            board_id = self.board_bravo_id
+
+        user_initial = user_initial.lower()
+
+        actions = self.get_data_from_query(
+            self.base_action_url, self.action_query, board_id
+        )
+        card_list = self.get_data_from_query(
+            self.base_card_list_url, self.card_list_query, board_id
+        )
+
+        split_cards = self.split_cards_by_category(card_list)
+
+        actions_data_needed = self.filter_actions_data(actions)
+        separated_tasks = self.separate_tasks_in_action_data(
+            actions_data_needed, split_cards
+        )
+
+        final_msg = self.generate_msg(separated_tasks)
+        return final_msg
 
 
 class SlackAPIHandler:
-
     def __init__(self, cfg):
-        pass
+        self.token = cfg.token
+        self.bot_id = cfg.bot_id
+        self.mention_regex = cfg.mention_regex
 
     def initialize_slack_api(self):
-        self.slack_client = SlackClient(os.environ.get('SLACK_BOT_TOKEN'))
-        self.starterbot_id = 'DFAB'
+        self.slack_client = SlackClient(self.token)
 
-    def parse_command(self):
-        pass
+    def receive_events(self):
+        return self.slack_client.rtm_read()
 
-    def return_result(self):
-        pass
+    def parse_bot_command(self, events):
+        """
+            Parses a list of events coming from the Slack RTM API to find bot commands.
+            If a bot command is found, this function returns a tuple of command and channel.
+            If its not found, then this function returns None, None.
+        """
+        for event in events:
+            if event["type"] == "message" and not "subtype" in event:
+                user_id, message = self.parse_direct_mention(event["text"])
+                if user_id == self.bot_id:
+                    return message, event["channel"]
+        return None, None
+
+    def parse_direct_mention(self, message_text):
+        """
+            Finds a direct mention (a mention that is at the beginning) in message text
+            and returns the user ID which was mentioned. If there is no direct mention, returns None
+        """
+        matches = re.search(self.mention_regex, message_text)
+        # the first group contains the username, the second group contains the remaining message
+        return (matches.group(1), matches.group(2).strip()) if matches else (None, None)
+
+    def response(self, response, channel):
+        self.slack_client.api_call(
+            "chat.postMessage",
+            channel=channel,
+            text=response
+        )
 
 
 class DFABBot(SlackAPIHandler, TrelloAPIHandler):
-
     def __init__(self, cfg):
         self.cfg = cfg
 
