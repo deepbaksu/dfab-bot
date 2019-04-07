@@ -14,13 +14,16 @@ class TrelloAPIHandler:
         self.base_card_list_url = cfg.url.card_list
         self.board_alpha_id = cfg.board.alpha
         self.board_bravo_id = cfg.board.bravo
-        self.action_query = cfg.query.action
-        self.card_list_query = cfg.query.card_list
         self.key = cfg.key
         self.token = cfg.token
+        self.action_query = cfg.query.action
+        self.action_query = self.action_query.update(key=self.key,
+            token=self.token)
+        self.card_list_query = cfg.query.card_list
+        self.card_list_query = self.card_list_query.update(key=self.key,
+            token=self.token)
 
     def get_data_from_query(self, base_url, query, board_id):
-        query = query.update(key=self.key, token=self.token)
         query_url = base_url.format(board_id)
         data = requests.request("GET", query_url, params=query)
         data.raise_for_status()
@@ -51,7 +54,7 @@ class TrelloAPIHandler:
                 filtered_action_data.append(action_data)
         return filtered_action_data
 
-    def separate_tasks_in_action_data(actions_data, user_initial, *cards):
+    def separate_tasks_from_action_data(actions_data, user_initial, *cards):
         assert len(cards) == 4
         today_cards, done_cards, paused_cards, idea_cards = cards
 
@@ -99,13 +102,14 @@ class TrelloAPIHandler:
         final_msg = done_msg + today_msg + idea_msg + paused_msg
         return final_msg
 
-    def request(self, user_initial, period, board_prefix):
+    def request_daily_log(self, user_initial, period, board_prefix):
+        user_initial = user_initial.lower()
+        assert board_prefix in ["a", "b"]
+
         if board_prefix == "a":
             board_id = self.board_alpha_id
         elif board_prefix == "b":
             board_id = self.board_bravo_id
-
-        user_initial = user_initial.lower()
 
         actions = self.get_data_from_query(
             self.base_action_url, self.action_query, board_id
@@ -116,9 +120,9 @@ class TrelloAPIHandler:
 
         split_cards = self.split_cards_by_category(card_list)
 
-        actions_data_needed = self.filter_actions_data(actions)
-        separated_tasks = self.separate_tasks_in_action_data(
-            actions_data_needed, split_cards
+        filtered_actions_data= self.filter_actions_data(actions)
+        separated_tasks = self.separate_tasks_from_action_data(
+            filtered_actions_data, split_cards
         )
 
         final_msg = self.generate_msg(separated_tasks)
@@ -130,6 +134,7 @@ class SlackAPIHandler:
         self.token = cfg.token
         self.bot_id = cfg.bot_id
         self.mention_regex = cfg.mention_regex
+        self.start_cmd = cfg.start_cmd
 
     def initialize_slack_api(self):
         self.slack_client = SlackClient(self.token)
@@ -137,7 +142,7 @@ class SlackAPIHandler:
     def receive_events(self):
         return self.slack_client.rtm_read()
 
-    def parse_bot_command(self, events):
+    def parse_events_to_bot_command(self, events):
         """
             Parses a list of events coming from the Slack RTM API to find bot commands.
             If a bot command is found, this function returns a tuple of command and channel.
@@ -146,9 +151,24 @@ class SlackAPIHandler:
         for event in events:
             if event["type"] == "message" and not "subtype" in event:
                 user_id, message = self.parse_direct_mention(event["text"])
+                channel = event["channel"]
                 if user_id == self.bot_id:
-                    return message, event["channel"]
+                    return message, channel
         return None, None
+
+    def parse_message_to_trello_input(self, message):
+        response = None
+
+        if message.startswith(self.start_cmd):
+            trello_inputs = message.split()
+            self.logger.info(message)
+            if len(trello_inputs) != 4:
+                response = 'More or less than 4 items input, please check the input
+                format \n e.g.) @DFAB get [userinitial] [period] [a/b]
+                '
+            else:
+                trello_inputs = trello_inputs[1:]
+        return trello_inputs, response
 
     def parse_direct_mention(self, message_text):
         """
@@ -168,16 +188,48 @@ class SlackAPIHandler:
 
 
 class DFABBot(SlackAPIHandler, TrelloAPIHandler):
-    def __init__(self, cfg):
+    def __init__(self, cfg, logger):
         self.cfg = cfg
+        self.logger = logger
 
-    def run(self, bot_command, forever=True):
-        while True:
-            self.initialize_slack_api()
-            parsed_command = self.parse_command(bot_command)
-            result = self.request(parsed_command)
-            self.return_result(result)
-            if forever:
-                continue
-            else:
-                break
+    def run(self):
+        self.initialize_slack_api()
+
+        while not events:  # or is not None
+            events = self.receive_events()
+        message, channel = self.parse_events_to_bot_command(events)
+        trello_inputs, response = self.parse_message_to_trello_input(message)
+
+        if response is not None:
+            try:
+                daily_log = self.request_daily_log(*trello_inputs)
+            except Exception as e:
+                self.logger.error("[ERROR]", exc_info=True)
+                daily_log = "Error has occurred, please check the input
+                    format \n e.g.) @DFAB get [userinitial] [period] [a/b]"
+
+        self.response(daily_log)
+
+
+def test_trello_handler():
+    cfg = Config()
+    logger = get_logger()
+    bot = DFABBot(cfg=cfg, logger=logger)
+
+    user_initial = 'wk'
+    period = 1
+    board_prefix = 'a'
+    response = bot.request_daily_log(user_initial, period, board_prefix)
+    assert response == "something"
+
+
+def test_slack_handler():
+    cfg = Config()
+    logger = get_logger()
+    bot = DFABBot(cfg=cfg, logger=logger)
+    pass
+
+
+if __name__ == '__main__':
+    test_trello_handler()
+    test_slack_handler()
