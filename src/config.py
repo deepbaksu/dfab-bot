@@ -1,5 +1,6 @@
 import os
 
+
 trello_cfg = dict(
     board=dict(alpha=os.environ.get("ALPHA"), bravo=os.environ.get("BRAVO")),
     key=os.environ.get("KEY"),
