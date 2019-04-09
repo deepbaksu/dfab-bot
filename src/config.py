@@ -17,7 +17,6 @@ trello_cfg = dict(
 
 slack_cfg = dict(
     token=os.environ.get("SLACK_BOT_TOKEN"),
-    bot_id="DFAB",
     mention_regex="^<@(|[WU].+?)>(.*)",
     start_cmd="get",
 )

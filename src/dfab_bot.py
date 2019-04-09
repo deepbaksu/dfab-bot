@@ -91,7 +91,7 @@ class TrelloAPIHandler:
         return idea_tasks, today_tasks, done_tasks, paused_tasks
 
     def generate_msg(self, tasks):
-        today_tasks, done_tasks, paused_tasks, idea_tasks = tasks
+        idea_tasks, today_tasks, done_tasks, paused_tasks = tasks
 
         done_msg = "*Done*\n" + "\n".join(done_tasks) + "\n\n" if done_tasks else ""
         today_msg = "*Today*\n" + "\n".join(today_tasks) + "\n\n" if today_tasks else ""
@@ -132,12 +132,12 @@ class TrelloAPIHandler:
 class SlackAPIHandler:
     def __init__(self, cfg):
         self.token = cfg['token']
-        self.bot_id = cfg['bot_id']
         self.mention_regex = cfg['mention_regex']
         self.start_cmd = cfg['start_cmd']
 
     def initialize_slack_api(self):
         self.slack_client = SlackClient(self.token)
+        self.bot_id = self.slack_client.api_call("auth.test")["user_id"]
 
     def receive_events(self):
         return self.slack_client.rtm_read()
@@ -214,13 +214,29 @@ class SlackAPIHandler:
 
 def test_trello_handler():
     client = TrelloAPIHandler(trello_cfg)
-    user_initial = 'WK'
-    period = 1
-    board_prefix = 'b'
+    user_initial = 'mk'
+    period = 100
+    board_prefix = 'a'
     response = client.request_daily_log(user_initial, period, board_prefix)
     print(response)
 
 
+def test_slack_handler():
+    client = SlackAPIHandler(slack_cfg)
+    client.initialize_slack_api()
+
+    if client.slack_client.rtm_connect(with_team_state=False):
+        print("slack connected")
+
+    events = []
+    while True:
+        events = client.receive_events()
+        message, channel = client.parse_events_to_bot_command(events)
+        if message is not None:
+            print("Message", message, channel)
+            break
+
+
 if __name__ == '__main__':
     test_trello_handler()
-#    test_slack_handler()
+    test_slack_handler()
